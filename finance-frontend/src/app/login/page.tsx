@@ -7,13 +7,34 @@ import { useRouter } from "next/navigation";
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate API Call for local JWT login
-    console.log("Login with", username, password);
-    router.push("/");
+    setError("");
+    setLoading(true);
+
+    try {
+      const response = await fetch("http://localhost:8080/api/auth/authenticate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Credenciais inválidas");
+      }
+
+      const data = await response.json();
+      localStorage.setItem("token", data.token);
+      router.push("/");
+    } catch (err: any) {
+      setError(err.message || "Erro ao conectar no servidor.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,6 +49,12 @@ export default function Login() {
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
+          {error && (
+            <div className="bg-destructive/10 text-destructive p-3 rounded-lg text-sm text-center">
+              {error}
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-2">Usuário</label>
             <input
@@ -54,10 +81,11 @@ export default function Login() {
 
           <button
             type="submit"
-            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-blue-600 text-primary-foreground py-3 px-4 rounded-lg font-semibold transition-all duration-200"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-blue-600 text-primary-foreground py-3 px-4 rounded-lg font-semibold transition-all duration-200 disabled:opacity-50"
           >
             <LogIn className="w-5 h-5" />
-            Entrar
+            {loading ? "Entrando..." : "Entrar"}
           </button>
         </form>
       </div>
