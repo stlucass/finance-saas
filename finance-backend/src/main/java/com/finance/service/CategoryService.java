@@ -26,6 +26,7 @@ public class CategoryService {
         category.setName(categoryDetails.getName());
         category.setType(categoryDetails.getType());
         category.setColor(categoryDetails.getColor());
+        category.setMonthlyLimit(categoryDetails.getMonthlyLimit());
         return repository.save(category);
     }
 

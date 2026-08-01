@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { Tags, Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 
@@ -10,6 +10,7 @@ type Category = {
   name: string;
   type: "INCOME" | "EXPENSE";
   color: string; // hexadecimal
+  monthlyLimit?: number;
 };
 
 const PRESET_COLORS = ["#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#f43f5e"];
@@ -22,7 +23,8 @@ export default function Categories() {
   const [formData, setFormData] = useState<Category>({
     name: "",
     type: "EXPENSE",
-    color: PRESET_COLORS[0]
+    color: PRESET_COLORS[0],
+    monthlyLimit: undefined
   });
 
   const loadCategories = async () => {
@@ -42,7 +44,7 @@ export default function Categories() {
 
   const openCreate = () => {
     setIsEdit(false);
-    setFormData({ name: "", type: "EXPENSE", color: PRESET_COLORS[0] });
+    setFormData({ name: "", type: "EXPENSE", color: PRESET_COLORS[0], monthlyLimit: undefined });
     setShowModal(true);
   };
 
@@ -55,15 +57,23 @@ export default function Categories() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...formData,
+        // Limpa o limite se o tipo mudar para Receita
+        monthlyLimit: formData.type === "EXPENSE" && formData.monthlyLimit !== undefined && formData.monthlyLimit !== null
+          ? Number(formData.monthlyLimit)
+          : null
+      };
+
       if (isEdit && formData.id) {
         await fetchApi(`/categories/${formData.id}`, {
           method: "PUT",
-          body: JSON.stringify(formData)
+          body: JSON.stringify(payload)
         });
       } else {
         await fetchApi(`/categories`, {
           method: "POST",
-          body: JSON.stringify(formData)
+          body: JSON.stringify(payload)
         });
       }
       setShowModal(false);
@@ -109,6 +119,7 @@ export default function Categories() {
                   <th className="p-4 font-medium border-b border-border">Nome</th>
                   <th className="p-4 font-medium border-b border-border">Tipo</th>
                   <th className="p-4 font-medium border-b border-border">Cor</th>
+                  <th className="p-4 font-medium border-b border-border">Limite Mensal</th>
                   <th className="p-4 font-medium border-b border-border text-right">Ações</th>
                 </tr>
               </thead>
@@ -130,6 +141,19 @@ export default function Categories() {
                       <span className="w-4 h-4 rounded" style={{ backgroundColor: cat.color }}></span>
                       <span className="text-muted-foreground font-mono">{cat.color}</span>
                     </td>
+                    <td className="p-4">
+                      {cat.type === "EXPENSE" ? (
+                        cat.monthlyLimit && cat.monthlyLimit > 0 ? (
+                          <span className="font-semibold text-foreground">
+                            R$ {cat.monthlyLimit.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">Sem limite</span>
+                        )
+                      ) : (
+                        <span className="text-muted-foreground/30 text-xs">—</span>
+                      )}
+                    </td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2">
                         <button
@@ -150,7 +174,7 @@ export default function Categories() {
                 ))}
                 {categories.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
                       Nenhuma categoria cadastrada.
                     </td>
                   </tr>
@@ -187,6 +211,25 @@ export default function Categories() {
                     <option value="EXPENSE">Despesa</option>
                   </select>
                 </div>
+                
+                {formData.type === "EXPENSE" && (
+                  <div>
+                    <label className="block text-sm text-muted-foreground mb-1">Limite Mensal (R$ - Opcional)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.monthlyLimit !== undefined && formData.monthlyLimit !== null ? formData.monthlyLimit : ""}
+                      onChange={(e) => setFormData({ 
+                        ...formData, 
+                        monthlyLimit: e.target.value === "" ? undefined : Number(e.target.value) 
+                      })}
+                      className="w-full bg-input border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-primary"
+                      placeholder="Sem limite de gastos"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm text-muted-foreground mb-1">Cor</label>
                   <div className="flex items-center gap-2">

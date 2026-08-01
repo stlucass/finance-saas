@@ -27,4 +27,7 @@ public class Category {
 
     @Column(nullable = false)
     private String color;
+
+    @Column(name = "monthly_limit")
+    private Double monthlyLimit;
 }

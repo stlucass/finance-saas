@@ -26,6 +26,7 @@ export default function Home() {
 
   const [barData, setBarData] = useState<any[]>([]);
   const [pieData, setPieData] = useState<any[]>([]);
+  const [budgets, setBudgets] = useState<any[]>([]);
 
   // Filtros de tempo
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -45,6 +46,7 @@ export default function Home() {
   const calculateMetrics = (
     transactions: any[],
     accounts: any[],
+    categoriesList: any[],
     activeAccounts: number[],
     activeCategories: number[]
   ) => {
@@ -61,6 +63,7 @@ export default function Home() {
 
     const barDataMap: Record<string, any> = {};
     const pieDataMap: Record<string, { value: number; color: string }> = {};
+    const categoryExpensesMap: Record<number, number> = {};
 
     // 2. Filtra transações correspondentes a contas e categorias selecionadas
     transactions.forEach((tx: any) => {
@@ -90,6 +93,13 @@ export default function Home() {
           pieDataMap[catName].value += tx.amount;
         }
       }
+
+      // 3. Para Orçamentos: Calcula despesas apenas das contas ativas (mesmo se a categoria estiver desmarcada no filtro, queremos manter o progresso visível se possuir limite cadastrado)
+      if (isAccountActive) {
+        if (tx.type === "EXPENSE") {
+          categoryExpensesMap[categoryId] = (categoryExpensesMap[categoryId] || 0) + tx.amount;
+        }
+      }
     });
 
     const sortedBarData = Object.values(barDataMap).sort((a: any, b: any) => a.name.localeCompare(b.name));
@@ -99,11 +109,28 @@ export default function Home() {
       color: pieDataMap[key].color
     }));
 
+    // 4. Mapeia categorias que possuem limite cadastrado para os Orçamentos
+    const calculatedBudgets = categoriesList
+      .filter((cat: any) => cat.type === "EXPENSE" && cat.monthlyLimit && cat.monthlyLimit > 0)
+      .map((cat: any) => {
+        const spent = categoryExpensesMap[cat.id] || 0;
+        const percentage = (spent / cat.monthlyLimit) * 100;
+        return {
+          id: cat.id,
+          name: cat.name,
+          color: cat.color,
+          limit: cat.monthlyLimit,
+          spent,
+          percentage
+        };
+      });
+
     setBalance(totalBalance);
     setIncome(totalIncome);
     setExpense(totalExpense);
     setBarData(sortedBarData);
     setPieData(finalPieData);
+    setBudgets(calculatedBudgets);
   };
 
   const loadDashboardData = async () => {
@@ -124,7 +151,6 @@ export default function Home() {
         if (prev.length === 0) {
           return accountsData.map((a: any) => a.id);
         }
-        // Garante que só mantemos contas existentes no novo array
         const validIds = accountsData.map((a: any) => a.id);
         return prev.filter(id => validIds.includes(id));
       });
@@ -141,7 +167,7 @@ export default function Home() {
       const activeAccs = selectedAccounts.length === 0 ? accountsData.map((a: any) => a.id) : selectedAccounts;
       const activeCats = selectedCategories.length === 0 ? [...categoriesData.map((c: any) => c.id), -1] : selectedCategories;
 
-      calculateMetrics(txData, accountsData, activeAccs, activeCats);
+      calculateMetrics(txData, accountsData, categoriesData, activeAccs, activeCats);
     } catch (error) {
       console.error("Erro ao carregar dados do dashboard:", error);
     } finally {
@@ -154,12 +180,12 @@ export default function Home() {
     loadDashboardData();
   }, [selectedMonth, selectedYear]);
 
-  // Dispara o recálculo local no frontend sempre que os filtros mudarem
+  // Dispara o recálculo local no frontend sempre que os filtros ou os dados brutos mudarem
   useEffect(() => {
     if (rawTransactions.length > 0 || allAccounts.length > 0) {
-      calculateMetrics(rawTransactions, allAccounts, selectedAccounts, selectedCategories);
+      calculateMetrics(rawTransactions, allAccounts, allCategories, selectedAccounts, selectedCategories);
     }
-  }, [selectedAccounts, selectedCategories, rawTransactions, allAccounts]);
+  }, [selectedAccounts, selectedCategories, rawTransactions, allAccounts, allCategories]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -444,6 +470,87 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
+            {/* Orçamentos e Metas de Gastos */}
+            {budgets.length > 0 && (
+              <div className="mt-8 bg-card p-6 rounded-2xl border border-border shadow-lg">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-primary" />
+                  Orçamentos e Metas de Gastos
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {budgets.map((budget) => {
+                    const isOverLimit = budget.spent > budget.limit;
+                    const percentText = `${Math.round(budget.percentage)}%`;
+                    const barWidth = `${Math.min(budget.percentage, 100)}%`;
+
+                    return (
+                      <div 
+                        key={budget.id} 
+                        className={`bg-secondary/15 rounded-xl border p-5 transition-all duration-300 relative overflow-hidden ${
+                          isOverLimit 
+                            ? "border-destructive/30 shadow-[0_0_15px_rgba(239,68,68,0.07)]" 
+                            : "border-border hover:border-muted-foreground/30"
+                        }`}
+                      >
+                        {/* Indicador de estouro com efeito pulsante */}
+                        {isOverLimit && (
+                          <span className="absolute top-0 right-0 mt-3 mr-3 flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                          </span>
+                        )}
+
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-2">
+                            <span 
+                              className="w-2.5 h-2.5 rounded-full shrink-0" 
+                              style={{ backgroundColor: budget.color }} 
+                            />
+                            <span className="font-semibold text-sm text-foreground">{budget.name}</span>
+                          </div>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                            isOverLimit ? "bg-red-500/10 text-red-500" : "bg-primary/10 text-primary"
+                          }`}>
+                            {percentText}
+                          </span>
+                        </div>
+
+                        {/* Barra de Progresso */}
+                        <div className="w-full h-2 bg-secondary rounded-full overflow-hidden mb-3">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              isOverLimit ? "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" : ""
+                            }`}
+                            style={{ 
+                              width: barWidth, 
+                              backgroundColor: isOverLimit ? undefined : budget.color 
+                            }}
+                          />
+                        </div>
+
+                        {/* Detalhes do Valor */}
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">
+                            Gasto: <strong className="text-foreground">R$ {budget.spent.toFixed(2)}</strong>
+                          </span>
+                          <span className="text-muted-foreground">
+                            Limite: <strong className="text-foreground">R$ {budget.limit.toFixed(2)}</strong>
+                          </span>
+                        </div>
+
+                        {/* Mensagem de alerta se ultrapassou */}
+                        {isOverLimit && (
+                          <div className="mt-3 text-[11px] font-medium text-red-500 flex items-center gap-1">
+                            ⚠️ Limite excedido em R$ {(budget.spent - budget.limit).toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
