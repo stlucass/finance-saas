@@ -40,6 +40,9 @@ public class Transaction {
     @Column(name = "recurrence_frequency")
     private String recurrenceFrequency; // e.g. MONTHLY, WEEKLY (Optional)
 
+    @Column(name = "next_recurrence_date")
+    private LocalDate nextRecurrenceDate;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "account_id")
     private Account account;

@@ -18,6 +18,9 @@ public class TransactionService {
     }
 
     public Transaction save(Transaction transaction) {
+        if (transaction.isRecurring() && transaction.getNextRecurrenceDate() == null) {
+            transaction.setNextRecurrenceDate(transaction.getDate().plusMonths(1));
+        }
         return repository.save(transaction);
     }
 
@@ -27,6 +30,14 @@ public class TransactionService {
         transaction.setAmount(transactionDetails.getAmount());
         transaction.setDate(transactionDetails.getDate());
         transaction.setType(transactionDetails.getType());
+        
+        // Se mudou de nao-recorrente para recorrente
+        if (transactionDetails.isRecurring() && !transaction.isRecurring()) {
+            transaction.setNextRecurrenceDate(transactionDetails.getDate().plusMonths(1));
+        } else if (!transactionDetails.isRecurring()) {
+            transaction.setNextRecurrenceDate(null);
+        }
+        
         transaction.setRecurring(transactionDetails.isRecurring());
         transaction.setRecurrenceFrequency(transactionDetails.getRecurrenceFrequency());
         transaction.setAccount(transactionDetails.getAccount());
