@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X } from "lucide-react";
+import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 
@@ -99,6 +99,40 @@ export default function Transactions() {
     }
   };
 
+  const exportToCSV = () => {
+    if (transactions.length === 0) {
+      alert("Nenhuma transação para exportar");
+      return;
+    }
+
+    const headers = ["Descrição", "Categoria", "Conta", "Data", "Tipo", "Valor (R$)"];
+    const rows = transactions.map(tx => [
+      tx.description,
+      tx.category?.name || "Sem Categoria",
+      tx.account?.name || "Sem Conta",
+      tx.date,
+      tx.type === "INCOME" ? "Receita" : "Despesa",
+      tx.amount.toFixed(2).replace(".", ",")
+    ]);
+
+    const csvContent = [
+      headers.join(";"),
+      ...rows.map(e => e.join(";"))
+    ].join("\n");
+
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    
+    const filename = `transacoes_${selectedMonth ? String(selectedMonth).padStart(2, '0') : 'todos'}_${selectedYear || 'todos'}.csv`;
+    link.setAttribute("download", filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar />
@@ -178,6 +212,15 @@ export default function Transactions() {
                     Limpar Filtros
                   </button>
                 )}
+
+                <button
+                  onClick={exportToCSV}
+                  className="flex items-center gap-1.5 text-xs text-primary-foreground bg-primary hover:bg-blue-600 border border-transparent rounded-lg px-3 py-2 transition-colors font-medium"
+                  title="Exportar para Planilha (.csv)"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Exportar CSV
+                </button>
               </div>
             </div>
             <table className="w-full text-left border-collapse">
