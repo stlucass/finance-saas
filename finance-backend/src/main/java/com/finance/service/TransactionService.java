@@ -16,11 +16,17 @@ public class TransactionService {
     private final TransactionRepository repository;
 
     public List<Transaction> findAll(Integer month, Integer year) {
-        if (month != null && year != null) {
-            YearMonth yearMonth = YearMonth.of(year, month);
-            LocalDate start = yearMonth.atDay(1);
-            LocalDate end = yearMonth.atEndOfMonth();
-            return repository.findByDateBetweenOrderByDateDesc(start, end);
+        if (year != null) {
+            if (month != null) {
+                YearMonth yearMonth = YearMonth.of(year, month);
+                LocalDate start = yearMonth.atDay(1);
+                LocalDate end = yearMonth.atEndOfMonth();
+                return repository.findByDateBetweenOrderByDateDesc(start, end);
+            } else {
+                LocalDate start = LocalDate.of(year, 1, 1);
+                LocalDate end = LocalDate.of(year, 12, 31);
+                return repository.findByDateBetweenOrderByDateDesc(start, end);
+            }
         }
         return repository.findAllByOrderByDateDesc();
     }

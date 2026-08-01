@@ -56,7 +56,6 @@ export default function Accounts() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Tem certeza que deseja excluir?")) return;
     try {
       await fetchApi(`/accounts/${id}`, { method: "DELETE" });
       loadAccounts();

@@ -85,7 +85,6 @@ export default function Categories() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Tem certeza que deseja excluir esta categoria?")) return;
     try {
       await fetchApi(`/categories/${id}`, { method: "DELETE" });
       loadCategories();

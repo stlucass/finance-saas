@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw } from "lucide-react";
+import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 
@@ -24,8 +24,8 @@ export default function Transactions() {
   
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState<number | "">(new Date().getFullYear());
   
   const [formData, setFormData] = useState<any>({ 
     description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
@@ -38,8 +38,12 @@ export default function Transactions() {
 
   const loadAllData = async () => {
     try {
+      let query = "";
+      if (selectedMonth) query += `month=${selectedMonth}&`;
+      if (selectedYear) query += `year=${selectedYear}`;
+
       const [txData, accData, catData] = await Promise.all([
-        fetchApi(`/transactions?month=${selectedMonth}&year=${selectedYear}`),
+        fetchApi(`/transactions?${query}`),
         fetchApi("/accounts"),
         fetchApi("/categories")
       ]);
@@ -86,7 +90,6 @@ export default function Transactions() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Tem certeza que deseja excluir?")) return;
     try {
       await fetchApi(`/transactions/${id}`, { method: "DELETE" });
       loadAllData();
@@ -133,22 +136,48 @@ export default function Transactions() {
                 placeholder="Buscar transação..." 
                 className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary w-64"
               />
-              <div className="flex gap-4">
+              <div className="flex gap-4 items-center">
                 <select 
                   value={selectedMonth}
-                  onChange={e => setSelectedMonth(Number(e.target.value))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setSelectedMonth(val === "" ? "" : Number(val));
+                  }}
                   className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary text-foreground"
                 >
+                  <option value="">Todos os meses</option>
                   {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
                     .map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
                 </select>
                 <select 
                   value={selectedYear}
-                  onChange={e => setSelectedYear(Number(e.target.value))}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const yearVal = val === "" ? "" : Number(val);
+                    setSelectedYear(yearVal);
+                    if (yearVal === "") {
+                      setSelectedMonth("");
+                    }
+                  }}
                   className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary text-foreground"
                 >
+                  <option value="">Todos os anos</option>
                   {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
+
+                {(selectedMonth !== "" || selectedYear !== "") && (
+                  <button
+                    onClick={() => {
+                      setSelectedMonth("");
+                      setSelectedYear("");
+                    }}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary/40 border border-border rounded-lg px-3 py-2 transition-colors"
+                    title="Limpar filtros"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Limpar Filtros
+                  </button>
+                )}
               </div>
             </div>
             <table className="w-full text-left border-collapse">

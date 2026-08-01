@@ -26,5 +26,14 @@ export async function fetchApi(endpoint: string, options: RequestInit = {}) {
     throw new Error("Erro na requisição");
   }
 
-  return response.json();
+  if (response.status === 204) {
+    return null;
+  }
+
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+
+  return null;
 }
