@@ -5,6 +5,8 @@ import com.finance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 
 @Service
@@ -13,8 +15,14 @@ public class TransactionService {
 
     private final TransactionRepository repository;
 
-    public List<Transaction> findAll() {
-        return repository.findAll();
+    public List<Transaction> findAll(Integer month, Integer year) {
+        if (month != null && year != null) {
+            YearMonth yearMonth = YearMonth.of(year, month);
+            LocalDate start = yearMonth.atDay(1);
+            LocalDate end = yearMonth.atEndOfMonth();
+            return repository.findByDateBetweenOrderByDateDesc(start, end);
+        }
+        return repository.findAllByOrderByDateDesc();
     }
 
     public Transaction save(Transaction transaction) {

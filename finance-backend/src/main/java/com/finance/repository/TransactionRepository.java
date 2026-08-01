@@ -8,4 +8,6 @@ import java.util.List;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
     List<Transaction> findByRecurringTrueAndNextRecurrenceDateLessThanEqual(LocalDate date);
+    List<Transaction> findByDateBetweenOrderByDateDesc(LocalDate startDate, LocalDate endDate);
+    List<Transaction> findAllByOrderByDateDesc();
 }

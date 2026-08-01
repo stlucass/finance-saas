@@ -16,8 +16,11 @@ public class TransactionController {
     private final TransactionService service;
 
     @GetMapping
-    public ResponseEntity<List<Transaction>> getAll() {
-        return ResponseEntity.ok(service.findAll());
+    public ResponseEntity<List<Transaction>> getAll(
+            @RequestParam(required = false) Integer month,
+            @RequestParam(required = false) Integer year
+    ) {
+        return ResponseEntity.ok(service.findAll(month, year));
     }
 
     @PostMapping

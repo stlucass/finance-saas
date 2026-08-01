@@ -24,6 +24,8 @@ export default function Transactions() {
   
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   const [formData, setFormData] = useState<any>({ 
     description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
@@ -32,12 +34,12 @@ export default function Transactions() {
 
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [selectedMonth, selectedYear]);
 
   const loadAllData = async () => {
     try {
       const [txData, accData, catData] = await Promise.all([
-        fetchApi("/transactions"),
+        fetchApi(`/transactions?month=${selectedMonth}&year=${selectedYear}`),
         fetchApi("/accounts"),
         fetchApi("/categories")
       ]);
@@ -131,6 +133,23 @@ export default function Transactions() {
                 placeholder="Buscar transação..." 
                 className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary w-64"
               />
+              <div className="flex gap-4">
+                <select 
+                  value={selectedMonth}
+                  onChange={e => setSelectedMonth(Number(e.target.value))}
+                  className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary text-foreground"
+                >
+                  {["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+                    .map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
+                </select>
+                <select 
+                  value={selectedYear}
+                  onChange={e => setSelectedYear(Number(e.target.value))}
+                  className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary text-foreground"
+                >
+                  {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
             </div>
             <table className="w-full text-left border-collapse">
               <thead>
@@ -159,9 +178,15 @@ export default function Transactions() {
                       </div>
                     </td>
                     <td className="p-4">
-                      <div className="text-sm">
-                        <span className="font-medium">{tx.category?.name}</span>
-                        <span className="text-muted-foreground block text-xs">{tx.account?.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full shrink-0" 
+                          style={{ backgroundColor: tx.category?.color || "#9ca3af" }}
+                        />
+                        <div className="text-sm">
+                          <span className="font-medium">{tx.category?.name || "Sem Categoria"}</span>
+                          <span className="text-muted-foreground block text-xs">{tx.account?.name}</span>
+                        </div>
                       </div>
                     </td>
                     <td className="p-4 text-muted-foreground text-sm">
