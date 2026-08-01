@@ -26,8 +26,8 @@ export default function Transactions() {
   
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number | "">(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number | "">("");
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTab] = useState<"history" | "recurring">("history");
   
@@ -70,6 +70,7 @@ export default function Transactions() {
         type: formData.type,
         date: formData.date,
         recurring: formData.recurring,
+        recurrenceFrequency: formData.recurring ? (formData.recurrenceFrequency || "MONTHLY") : null,
         paid: formData.paid !== undefined ? formData.paid : true,
         account: { id: Number(formData.accountId) },
         category: { id: Number(formData.categoryId) }
@@ -395,7 +396,9 @@ export default function Transactions() {
                             onClick={() => {
                               setFormData({
                                 id: tx.id, description: tx.description, amount: tx.amount, type: tx.type, 
-                                date: tx.date, recurring: tx.recurring, paid: tx.paid !== undefined ? tx.paid : true, accountId: tx.account?.id, categoryId: tx.category?.id
+                                date: tx.date, recurring: tx.recurring, 
+                                recurrenceFrequency: (tx as any).recurrenceFrequency || "MONTHLY",
+                                paid: tx.paid !== undefined ? tx.paid : true, accountId: tx.account?.id, categoryId: tx.category?.id
                               });
                               setShowModal(true);
                             }}
@@ -482,11 +485,39 @@ export default function Transactions() {
                       type="checkbox" 
                       id="recurring"
                       checked={formData.recurring} 
-                      onChange={e => setFormData({...formData, recurring: e.target.checked})}
+                      onChange={e => setFormData({...formData, recurring: e.target.checked, recurrenceFrequency: e.target.checked ? (formData.recurrenceFrequency || "MONTHLY") : ""})}
                       className="w-4 h-4 rounded border-border text-primary focus:ring-primary"
                     />
                     <label htmlFor="recurring" className="text-sm text-foreground">É recorrente?</label>
                   </div>
+
+                  {/* Frequência de recorrência — aparece somente quando marcado */}
+                  {formData.recurring && (
+                    <div className="col-span-2">
+                      <label className="block text-sm text-muted-foreground mb-2">Frequência de Repetição</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[
+                          { value: "MONTHLY", label: "📅 Mensal", subtitle: "Mesma data todo mês" },
+                          { value: "LAST_DAY", label: "🗓️ Fim do Mês", subtitle: "Último dia (28, 30, 31...)" },
+                          { value: "LAST_BUSINESS_DAY", label: "💼 Último Dia Útil", subtitle: "Última Seg–Sex do mês" },
+                        ].map(opt => (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setFormData({...formData, recurrenceFrequency: opt.value})}
+                            className={`flex flex-col items-center text-center p-3 rounded-xl border-2 text-xs font-semibold transition-all gap-1 ${
+                              (formData.recurrenceFrequency || "MONTHLY") === opt.value
+                                ? "border-primary bg-primary/10 text-foreground"
+                                : "border-border bg-secondary/20 text-muted-foreground hover:border-primary/40"
+                            }`}
+                          >
+                            <span className="text-base">{opt.label}</span>
+                            <span className="text-[10px] font-normal leading-tight opacity-70">{opt.subtitle}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm text-muted-foreground mb-1">Conta</label>
                     <select 

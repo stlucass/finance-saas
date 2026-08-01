@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, SlidersHorizontal, ChevronDown, ChevronUp, X, TrendingUp, TrendingDown, Lightbulb, Award } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, SlidersHorizontal, ChevronDown, ChevronUp, X, TrendingUp, TrendingDown, Lightbulb, Award, Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import {
@@ -40,10 +40,14 @@ export default function Home() {
   const [insights, setInsights] = useState<InsightData[]>([]);
   const [pendingExpense, setPendingExpense] = useState(0);
   const [pendingIncome, setPendingIncome] = useState(0);
+  const [valuesHidden, setValuesHidden] = useState(false);
+
+  // Utilitário de máscara de privacidade
+  const maskValue = (value: string) => valuesHidden ? "••••••" : value;
 
   // Filtros de tempo
-  const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState<number | "">(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number | "">("");
+  const [selectedYear, setSelectedYear] = useState<number | "">("");
   const [showFilters, setShowFilters] = useState(false);
 
   // Estados dos dados brutos
@@ -418,6 +422,20 @@ export default function Home() {
               Filtros
               {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
+
+            {/* Botão de Privacidade */}
+            <button
+              onClick={() => setValuesHidden(prev => !prev)}
+              className={`flex items-center gap-2 border px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                valuesHidden
+                  ? "bg-yellow-500/10 border-yellow-500/40 text-yellow-500"
+                  : "bg-card border-border hover:bg-secondary/30 text-foreground"
+              }`}
+              title={valuesHidden ? "Mostrar valores" : "Ocultar valores"}
+            >
+              {valuesHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {valuesHidden ? "Mostrar" : "Ocultar"}
+            </button>
           </div>
         </header>
 
@@ -608,7 +626,7 @@ export default function Home() {
                     <p className="text-sm font-medium text-muted-foreground">
                       {selectedMonth !== "" ? "Saldo Total Contas" : "Saldo Consolidado do Período"}
                     </p>
-                    <h3 className="text-3xl font-bold mt-1">R$ {balance.toFixed(2)}</h3>
+                    <h3 className="text-3xl font-bold mt-1 tracking-widest">{valuesHidden ? "R$ ••••••" : `R$ ${balance.toFixed(2)}`}</h3>
                   </div>
                 </div>
               </div>
@@ -621,11 +639,11 @@ export default function Home() {
                   <p className="text-sm font-medium text-muted-foreground mb-1">
                     {selectedMonth !== "" ? "Total de Entradas" : "Total Entradas no Ano"}
                   </p>
-                  <h3 className="text-3xl font-bold text-green-500">R$ {income.toFixed(2)}</h3>
+                  <h3 className="text-3xl font-bold text-green-500 tracking-widest">{valuesHidden ? "R$ ••••••" : `R$ ${income.toFixed(2)}`}</h3>
                   {pendingIncome > 0 && (
                     <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
                       <span className="inline-block w-2 h-2 rounded-full bg-yellow-500/70" />
-                      + R$ {pendingIncome.toFixed(2)} a receber
+                      {valuesHidden ? "+ R$ •••••• a receber" : `+ R$ ${pendingIncome.toFixed(2)} a receber`}
                     </p>
                   )}
                 </div>
@@ -639,11 +657,11 @@ export default function Home() {
                   <p className="text-sm font-medium text-muted-foreground mb-1">
                     {selectedMonth !== "" ? "Total de Saídas" : "Total Saídas no Ano"}
                   </p>
-                  <h3 className="text-3xl font-bold text-red-500">R$ {expense.toFixed(2)}</h3>
+                  <h3 className="text-3xl font-bold text-red-500 tracking-widest">{valuesHidden ? "R$ ••••••" : `R$ ${expense.toFixed(2)}`}</h3>
                   {pendingExpense > 0 && (
                     <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
                       <span className="inline-block w-2 h-2 rounded-full bg-yellow-500/70" />
-                      + R$ {pendingExpense.toFixed(2)} a pagar
+                      {valuesHidden ? "+ R$ •••••• a pagar" : `+ R$ ${pendingExpense.toFixed(2)} a pagar`}
                     </p>
                   )}
                 </div>
@@ -741,7 +759,7 @@ export default function Home() {
                       <Tooltip 
                         contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }}
                         itemStyle={{ color: '#fff' }}
-                        formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value: number) => valuesHidden ? '••••••' : `R$ ${value.toFixed(2)}`}
                         labelFormatter={(label, payload) => payload.length > 0 ? `Data: ${payload[0].payload.fullDate}` : label}
                       />
                       <Area type="monotone" dataKey="Acumulado" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAcumulado)" />
@@ -772,7 +790,7 @@ export default function Home() {
                         cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                         contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }}
                         itemStyle={{ color: '#fff' }}
-                        formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                        formatter={(value: number) => valuesHidden ? '••••••' : `R$ ${value.toFixed(2)}`}
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
@@ -848,10 +866,10 @@ export default function Home() {
                         {/* Detalhes do Valor */}
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">
-                            Gasto: <strong className="text-foreground">R$ {budget.spent.toFixed(2)}</strong>
+                            Gasto: <strong className="text-foreground">{valuesHidden ? '•••••• ' : `R$ ${budget.spent.toFixed(2)}`}</strong>
                           </span>
                           <span className="text-muted-foreground">
-                            Limite: <strong className="text-foreground">R$ {budget.limit.toFixed(2)}</strong>
+                            Limite: <strong className="text-foreground">{valuesHidden ? '•••••• ' : `R$ ${budget.limit.toFixed(2)}`}</strong>
                           </span>
                         </div>
 

@@ -5,6 +5,7 @@ import com.finance.repository.TransactionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -83,11 +84,45 @@ public class TransactionService {
                 .build();
         repository.save(newTransaction);
 
-        // Avança a data da próxima execução no template (+1 mês)
-        LocalDate nextDate = template.getNextRecurrenceDate() != null 
-                ? template.getNextRecurrenceDate() 
+        // Avança a data da próxima execução respeitando a frequência configurada
+        LocalDate nextDate = template.getNextRecurrenceDate() != null
+                ? template.getNextRecurrenceDate()
                 : template.getDate();
-        template.setNextRecurrenceDate(nextDate.plusMonths(1));
+        template.setNextRecurrenceDate(calculateNextDate(nextDate, template.getRecurrenceFrequency()));
         return repository.save(template);
+    }
+
+    /**
+     * Calcula a próxima data de recorrência com base na frequência configurada.
+     *
+     * MONTHLY         → soma +1 mês mantendo o dia (padrão)
+     * LAST_DAY        → último dia do próximo mês
+     * LAST_BUSINESS_DAY → último dia útil (Seg–Sex) do próximo mês
+     */
+    private LocalDate calculateNextDate(LocalDate from, String frequency) {
+        if (frequency == null) {
+            return from.plusMonths(1);
+        }
+
+        switch (frequency) {
+            case "LAST_BUSINESS_DAY": {
+                // Próximo mês, a partir de 'from'
+                YearMonth nextMonth = YearMonth.from(from).plusMonths(1);
+                // Começa no último dia do próximo mês e retrocede até um dia útil
+                LocalDate candidate = nextMonth.atEndOfMonth();
+                while (candidate.getDayOfWeek() == DayOfWeek.SATURDAY
+                        || candidate.getDayOfWeek() == DayOfWeek.SUNDAY) {
+                    candidate = candidate.minusDays(1);
+                }
+                return candidate;
+            }
+            case "LAST_DAY": {
+                YearMonth nextMonth = YearMonth.from(from).plusMonths(1);
+                return nextMonth.atEndOfMonth();
+            }
+            default:
+                // "MONTHLY" ou qualquer outro valor → data fixa +1 mês
+                return from.plusMonths(1);
+        }
     }
 }
