@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowUpRight, ArrowDownRight, Wallet, Activity, SlidersHorizontal, ChevronDown, ChevronUp, X } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Wallet, Activity, SlidersHorizontal, ChevronDown, ChevronUp, X, TrendingUp, TrendingDown, Lightbulb, Award } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 import {
@@ -20,6 +20,12 @@ import {
   Area
 } from "recharts";
 
+export interface InsightData {
+  type: "positive" | "negative" | "neutral";
+  message: string;
+  icon: "up" | "down" | "award" | "info";
+}
+
 export default function Home() {
   const [loading, setLoading] = useState(true);
   const [balance, setBalance] = useState(0);
@@ -31,6 +37,9 @@ export default function Home() {
   const [yearlyData, setYearlyData] = useState<any[]>([]);
   const [lineData, setLineData] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
+  const [insights, setInsights] = useState<InsightData[]>([]);
+  const [pendingExpense, setPendingExpense] = useState(0);
+  const [pendingIncome, setPendingIncome] = useState(0);
 
   // Filtros de tempo
   const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
@@ -64,6 +73,25 @@ export default function Home() {
 
     let totalIncome = 0;
     let totalExpense = 0;
+    let pendingExpense = 0;
+    let pendingIncome = 0;
+    
+    let prevTotalIncome = 0;
+    let prevTotalExpense = 0;
+    const prevCategoryExpensesMap: Record<number, number> = {};
+    
+    // Descobre mês/ano anterior para comparações
+    let targetPrevMonth = -1;
+    let targetPrevYear = -1;
+    if (selectedMonth !== "" && selectedYear !== "") {
+      if (selectedMonth === 1) {
+        targetPrevMonth = 12;
+        targetPrevYear = selectedYear - 1;
+      } else {
+        targetPrevMonth = selectedMonth - 1;
+        targetPrevYear = selectedYear;
+      }
+    }
 
     const barDataMap: Record<string, any> = {};
     const pieDataMap: Record<string, { value: number; color: string }> = {};
@@ -110,23 +138,41 @@ export default function Home() {
         const isMonthMatch = selectedMonth === "" || txMonth === selectedMonth;
 
         if (isMonthMatch) {
-          if (tx.type === "INCOME") totalIncome += tx.amount;
-          if (tx.type === "EXPENSE") totalExpense += tx.amount;
+          // Acumula pendentes separadamente (não entram nos totais principais)
+          if (tx.paid === false) {
+            if (tx.type === "EXPENSE") pendingExpense += tx.amount;
+            if (tx.type === "INCOME") pendingIncome += tx.amount;
+          } else {
+            // Apenas transações efetivadas afetam os totais e gráficos
+            if (tx.type === "INCOME") totalIncome += tx.amount;
+            if (tx.type === "EXPENSE") totalExpense += tx.amount;
 
-          const date = tx.date;
-          if (!barDataMap[date]) {
-            barDataMap[date] = { name: date, Receitas: 0, Despesas: 0 };
-          }
-          if (tx.type === "INCOME") barDataMap[date].Receitas += tx.amount;
-          if (tx.type === "EXPENSE") barDataMap[date].Despesas += tx.amount;
-
-          if (tx.type === "EXPENSE") {
-            const catName = tx.category?.name || "Sem Categoria";
-            const catColor = tx.category?.color || "#9ca3af";
-            if (!pieDataMap[catName]) {
-              pieDataMap[catName] = { value: 0, color: catColor };
+            const date = tx.date;
+            if (!barDataMap[date]) {
+              barDataMap[date] = { name: date, Receitas: 0, Despesas: 0 };
             }
-            pieDataMap[catName].value += tx.amount;
+            if (tx.type === "INCOME") barDataMap[date].Receitas += tx.amount;
+            if (tx.type === "EXPENSE") barDataMap[date].Despesas += tx.amount;
+
+            if (tx.type === "EXPENSE") {
+              const catName = tx.category?.name || "Sem Categoria";
+              const catColor = tx.category?.color || "#9ca3af";
+              if (!pieDataMap[catName]) {
+                pieDataMap[catName] = { value: 0, color: catColor };
+              }
+              pieDataMap[catName].value += tx.amount;
+            }
+          }
+        }
+
+        // D. Lógica de Insights (Acumula para o Mês Anterior)
+        if (targetPrevMonth !== -1 && targetPrevYear !== -1) {
+          if (txMonth === targetPrevMonth && txYear === targetPrevYear) {
+            if (tx.type === "INCOME") prevTotalIncome += tx.amount;
+            if (tx.type === "EXPENSE") {
+              prevTotalExpense += tx.amount;
+              prevCategoryExpensesMap[categoryId] = (prevCategoryExpensesMap[categoryId] || 0) + tx.amount;
+            }
           }
         }
       }
@@ -191,14 +237,60 @@ export default function Home() {
         };
       });
 
+    // 5. Geração de Insights Inteligentes
+    const generatedInsights: InsightData[] = [];
+    if (selectedMonth !== "" && selectedYear !== "") {
+      // Insight de Despesas Totais
+      if (prevTotalExpense > 0) {
+        const expenseDiff = totalExpense - prevTotalExpense;
+        const expensePercent = Math.abs((expenseDiff / prevTotalExpense) * 100).toFixed(0);
+        if (expenseDiff > 0) {
+          generatedInsights.push({ type: "negative", message: `Suas despesas subiram ${expensePercent}% em relação ao mês anterior (+ R$ ${expenseDiff.toFixed(2)}).`, icon: "down" });
+        } else if (expenseDiff < 0) {
+          generatedInsights.push({ type: "positive", message: `Ótimo! Você reduziu suas despesas em ${expensePercent}% (- R$ ${Math.abs(expenseDiff).toFixed(2)}).`, icon: "up" });
+        }
+      }
+
+      // Insight de Categoria com Maior Aumento
+      let maxCatIncrease = 0;
+      let maxCatName = "";
+      Object.keys(categoryExpensesMap).forEach((catIdStr) => {
+        const catId = Number(catIdStr);
+        const curr = categoryExpensesMap[catId] || 0;
+        const prev = prevCategoryExpensesMap[catId] || 0;
+        if (curr > prev) {
+          const diff = curr - prev;
+          if (diff > maxCatIncrease) {
+            maxCatIncrease = diff;
+            const category = categoriesList.find((c: any) => c.id === catId);
+            maxCatName = category ? category.name : "Sem Categoria";
+          }
+        }
+      });
+
+      if (maxCatIncrease > 0 && maxCatName) {
+        generatedInsights.push({ type: "neutral", message: `Atenção: Os gastos com '${maxCatName}' aumentaram R$ ${maxCatIncrease.toFixed(2)} este mês.`, icon: "info" });
+      }
+      
+      // Insight de Saldo Livre
+      if (totalIncome > 0 && totalIncome > totalExpense) {
+        const surplus = totalIncome - totalExpense;
+        const surplusPercent = ((surplus / totalIncome) * 100).toFixed(0);
+        generatedInsights.push({ type: "positive", message: `Parabéns! Você guardou ${surplusPercent}% da sua renda este mês (R$ ${surplus.toFixed(2)} de saldo).`, icon: "award" });
+      }
+    }
+
     setBalance(totalBalance);
     setIncome(totalIncome);
     setExpense(totalExpense);
+    setPendingExpense(pendingExpense);
+    setPendingIncome(pendingIncome);
     setBarData(sortedBarData);
     setLineData(finalLineData);
     setPieData(finalPieData);
     setBudgets(calculatedBudgets);
     setYearlyData(finalEvolutionData);
+    setInsights(generatedInsights);
   };
 
   const loadDashboardData = async () => {
@@ -470,6 +562,42 @@ export default function Home() {
           <div className="text-center text-muted-foreground py-10">Calculando...</div>
         ) : (
           <>
+            {/* Painel de Insights Inteligentes */}
+            {insights.length > 0 && (
+              <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {insights.map((insight, idx) => {
+                  let Icon = Lightbulb;
+                  let colorClass = "text-muted-foreground border-border bg-card";
+                  let bgIconClass = "bg-secondary";
+                  
+                  if (insight.type === "positive") {
+                    Icon = insight.icon === "award" ? Award : TrendingUp;
+                    colorClass = "text-green-500 border-green-500/20 bg-green-500/5";
+                    bgIconClass = "bg-green-500/10";
+                  } else if (insight.type === "negative") {
+                    Icon = insight.icon === "down" ? TrendingDown : TrendingDown;
+                    colorClass = "text-red-500 border-red-500/20 bg-red-500/5";
+                    bgIconClass = "bg-red-500/10";
+                  } else {
+                    Icon = insight.icon === "info" ? Lightbulb : Lightbulb;
+                    colorClass = "text-yellow-500 border-yellow-500/20 bg-yellow-500/5";
+                    bgIconClass = "bg-yellow-500/10";
+                  }
+
+                  return (
+                    <div key={idx} className={`p-4 rounded-xl border flex gap-4 items-center shadow-sm ${colorClass}`}>
+                      <div className={`p-3 rounded-full ${bgIconClass} shrink-0`}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <p className="text-sm font-medium leading-tight">
+                        {insight.message}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
               <div className="bg-card p-6 rounded-2xl border border-border shadow-lg">
                 <div className="flex items-center gap-4">
@@ -494,6 +622,12 @@ export default function Home() {
                     {selectedMonth !== "" ? "Total de Entradas" : "Total Entradas no Ano"}
                   </p>
                   <h3 className="text-3xl font-bold text-green-500">R$ {income.toFixed(2)}</h3>
+                  {pendingIncome > 0 && (
+                    <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-yellow-500/70" />
+                      + R$ {pendingIncome.toFixed(2)} a receber
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -506,6 +640,12 @@ export default function Home() {
                     {selectedMonth !== "" ? "Total de Saídas" : "Total Saídas no Ano"}
                   </p>
                   <h3 className="text-3xl font-bold text-red-500">R$ {expense.toFixed(2)}</h3>
+                  {pendingExpense > 0 && (
+                    <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1">
+                      <span className="inline-block w-2 h-2 rounded-full bg-yellow-500/70" />
+                      + R$ {pendingExpense.toFixed(2)} a pagar
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

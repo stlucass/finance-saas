@@ -54,6 +54,7 @@ public class TransactionService {
         
         transaction.setRecurring(transactionDetails.isRecurring());
         transaction.setRecurrenceFrequency(transactionDetails.getRecurrenceFrequency());
+        transaction.setPaid(transactionDetails.isPaid());
         transaction.setAccount(transactionDetails.getAccount());
         transaction.setCategory(transactionDetails.getCategory());
         return repository.save(transaction);
@@ -76,6 +77,7 @@ public class TransactionService {
                 .date(template.getNextRecurrenceDate() != null ? template.getNextRecurrenceDate() : LocalDate.now())
                 .type(template.getType())
                 .recurring(false)
+                .paid(true) // Lançamentos criados via recorrência já nascem efetivados
                 .account(template.getAccount())
                 .category(template.getCategory())
                 .build();

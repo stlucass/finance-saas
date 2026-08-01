@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X, Download, Play, CalendarClock } from "lucide-react";
+import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X, Download, Play, CalendarClock, Clock, CheckCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 
@@ -12,6 +12,7 @@ type Transaction = {
   type: string;
   date: string;
   recurring: boolean;
+  paid: boolean;
   recurrenceFrequency?: string;
   nextRecurrenceDate?: string;
   account: { id: number, name?: string };
@@ -32,7 +33,7 @@ export default function Transactions() {
   
   const [formData, setFormData] = useState<any>({ 
     description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
-    recurring: false, accountId: "", categoryId: "" 
+    recurring: false, paid: true, accountId: "", categoryId: "" 
   });
 
   useEffect(() => {
@@ -69,6 +70,7 @@ export default function Transactions() {
         type: formData.type,
         date: formData.date,
         recurring: formData.recurring,
+        paid: formData.paid !== undefined ? formData.paid : true,
         account: { id: Number(formData.accountId) },
         category: { id: Number(formData.categoryId) }
       };
@@ -110,6 +112,26 @@ export default function Transactions() {
     } catch (error) {
       console.error(error);
       alert("Erro ao processar transação recorrente");
+    }
+  };
+
+  const handleTogglePaid = async (tx: Transaction) => {
+    try {
+      const payload = {
+        description: tx.description,
+        amount: tx.amount,
+        type: tx.type,
+        date: tx.date,
+        recurring: tx.recurring,
+        paid: true,
+        account: { id: tx.account.id },
+        category: { id: tx.category?.id }
+      };
+      await fetchApi(`/transactions/${tx.id}`, { method: "PUT", body: JSON.stringify(payload) });
+      loadAllData();
+    } catch (e) {
+      console.error(e);
+      alert("Erro ao efetivar transação");
     }
   };
 
@@ -174,7 +196,7 @@ export default function Transactions() {
             onClick={() => {
               setFormData({ 
                 description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
-                recurring: false, accountId: accounts[0]?.id || "", categoryId: categories[0]?.id || "" 
+                recurring: false, paid: true, accountId: accounts[0]?.id || "", categoryId: categories[0]?.id || "" 
               });
               setShowModal(true);
             }}
@@ -311,6 +333,9 @@ export default function Transactions() {
                             <p className="font-semibold flex items-center gap-2">
                               {tx.description}
                               {tx.recurring && <span title="Recorrente"><RefreshCw className="w-3 h-3 text-muted-foreground" /></span>}
+                              {!tx.paid && activeTab === "history" && (
+                                <span title="Agendada / Pendente" className="flex items-center gap-1 text-[10px] bg-yellow-500/10 text-yellow-500 px-1.5 py-0.5 rounded uppercase font-bold ml-1"><Clock className="w-3 h-3" /> Pendente</span>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -348,6 +373,15 @@ export default function Transactions() {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex justify-end gap-2">
+                          {!tx.paid && activeTab === "history" && (
+                            <button
+                              onClick={() => handleTogglePaid(tx)}
+                              className="p-2 bg-secondary text-muted-foreground hover:text-green-500 hover:bg-green-500/10 rounded-lg transition-colors"
+                              title="Marcar como Efetivado (Pago/Recebido)"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                          )}
                           {activeTab === "recurring" && (
                             <button
                               onClick={() => tx.id && handleProcessRecurrence(tx.id)}
@@ -361,7 +395,7 @@ export default function Transactions() {
                             onClick={() => {
                               setFormData({
                                 id: tx.id, description: tx.description, amount: tx.amount, type: tx.type, 
-                                date: tx.date, recurring: tx.recurring, accountId: tx.account?.id, categoryId: tx.category?.id
+                                date: tx.date, recurring: tx.recurring, paid: tx.paid !== undefined ? tx.paid : true, accountId: tx.account?.id, categoryId: tx.category?.id
                               });
                               setShowModal(true);
                             }}
@@ -476,6 +510,43 @@ export default function Transactions() {
                       <option value="" disabled>Selecione...</option>
                       {categories.map(cat => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
                     </select>
+                  </div>
+
+                  {/* Status de Pagamento */}
+                  <div className="col-span-2">
+                    <label className="block text-sm text-muted-foreground mb-2">Status do Pagamento</label>
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, paid: true})}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                          formData.paid
+                            ? "border-green-500 bg-green-500/10 text-green-500"
+                            : "border-border bg-secondary/30 text-muted-foreground hover:border-green-500/50"
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        Efetivada / Paga
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({...formData, paid: false})}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
+                          !formData.paid
+                            ? "border-yellow-500 bg-yellow-500/10 text-yellow-500"
+                            : "border-border bg-secondary/30 text-muted-foreground hover:border-yellow-500/50"
+                        }`}
+                      >
+                        <Clock className="w-4 h-4" />
+                        Agendada / Pendente
+                      </button>
+                    </div>
+                    {!formData.paid && (
+                      <p className="text-xs text-yellow-500/80 mt-2 flex items-center gap-1.5">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        Esta transação ficará visível na lista, mas não afetará os totais do Dashboard até ser efetivada.
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-border">

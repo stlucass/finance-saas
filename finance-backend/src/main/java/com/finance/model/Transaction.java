@@ -39,6 +39,10 @@ public class Transaction {
     @Column(name = "is_recurring")
     private boolean recurring;
 
+    @Column(name = "is_paid", columnDefinition = "boolean default true")
+    @Builder.Default
+    private boolean paid = true;
+
     @Column(name = "recurrence_frequency")
     private String recurrenceFrequency; // e.g. MONTHLY, WEEKLY (Optional)
 
