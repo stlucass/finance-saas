@@ -26,6 +26,7 @@ export default function Home() {
 
   const [barData, setBarData] = useState<any[]>([]);
   const [pieData, setPieData] = useState<any[]>([]);
+  const [yearlyData, setYearlyData] = useState<any[]>([]);
   const [budgets, setBudgets] = useState<any[]>([]);
 
   // Filtros de tempo
@@ -65,6 +66,13 @@ export default function Home() {
     const pieDataMap: Record<string, { value: number; color: string }> = {};
     const categoryExpensesMap: Record<number, number> = {};
 
+    // Estruturas para o Gráfico Anual/Evolução
+    const MONTHS_NAMES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    
+    // Se ano estiver selecionado, inicia com os 12 meses
+    const evolutionMonthly = MONTHS_NAMES.map(m => ({ name: m, Receitas: 0, Despesas: 0 }));
+    const evolutionYearlyMap: Record<string, { name: string, Receitas: number, Despesas: number }> = {};
+
     // 2. Filtra transações correspondentes a contas e categorias selecionadas
     transactions.forEach((tx: any) => {
       const accountId = tx.account?.id;
@@ -74,30 +82,62 @@ export default function Home() {
       const isCategoryActive = activeCategories.includes(categoryId);
 
       if (isAccountActive && isCategoryActive) {
-        if (tx.type === "INCOME") totalIncome += tx.amount;
-        if (tx.type === "EXPENSE") totalExpense += tx.amount;
+        // Extrai ano e mês de forma segura
+        const [txYear, txMonth] = tx.date.split("-").map(Number);
 
-        const date = tx.date;
-        if (!barDataMap[date]) {
-          barDataMap[date] = { name: date, Receitas: 0, Despesas: 0 };
-        }
-        if (tx.type === "INCOME") barDataMap[date].Receitas += tx.amount;
-        if (tx.type === "EXPENSE") barDataMap[date].Despesas += tx.amount;
-
-        if (tx.type === "EXPENSE") {
-          const catName = tx.category?.name || "Sem Categoria";
-          const catColor = tx.category?.color || "#9ca3af";
-          if (!pieDataMap[catName]) {
-            pieDataMap[catName] = { value: 0, color: catColor };
+        // A. Agrupamento para Evolução Anual
+        if (selectedYear !== "") {
+          if (txYear === selectedYear) {
+            const monthIdx = txMonth - 1;
+            if (monthIdx >= 0 && monthIdx < 12) {
+              if (tx.type === "INCOME") evolutionMonthly[monthIdx].Receitas += tx.amount;
+              if (tx.type === "EXPENSE") evolutionMonthly[monthIdx].Despesas += tx.amount;
+            }
           }
-          pieDataMap[catName].value += tx.amount;
+        } else {
+          const yearStr = String(txYear);
+          if (!evolutionYearlyMap[yearStr]) {
+            evolutionYearlyMap[yearStr] = { name: yearStr, Receitas: 0, Despesas: 0 };
+          }
+          if (tx.type === "INCOME") evolutionYearlyMap[yearStr].Receitas += tx.amount;
+          if (tx.type === "EXPENSE") evolutionYearlyMap[yearStr].Despesas += tx.amount;
+        }
+
+        // B. Filtros do Mês ativo para os Cards, Fluxo Diário e Gráfico de Pizza
+        const isMonthMatch = selectedMonth === "" || txMonth === selectedMonth;
+
+        if (isMonthMatch) {
+          if (tx.type === "INCOME") totalIncome += tx.amount;
+          if (tx.type === "EXPENSE") totalExpense += tx.amount;
+
+          const date = tx.date;
+          if (!barDataMap[date]) {
+            barDataMap[date] = { name: date, Receitas: 0, Despesas: 0 };
+          }
+          if (tx.type === "INCOME") barDataMap[date].Receitas += tx.amount;
+          if (tx.type === "EXPENSE") barDataMap[date].Despesas += tx.amount;
+
+          if (tx.type === "EXPENSE") {
+            const catName = tx.category?.name || "Sem Categoria";
+            const catColor = tx.category?.color || "#9ca3af";
+            if (!pieDataMap[catName]) {
+              pieDataMap[catName] = { value: 0, color: catColor };
+            }
+            pieDataMap[catName].value += tx.amount;
+          }
         }
       }
 
-      // 3. Para Orçamentos: Calcula despesas apenas das contas ativas (mesmo se a categoria estiver desmarcada no filtro, queremos manter o progresso visível se possuir limite cadastrado)
+      // C. Para Orçamentos: Calcula despesas apenas das contas ativas no mês ativo do ano selecionado
       if (isAccountActive) {
-        if (tx.type === "EXPENSE") {
-          categoryExpensesMap[categoryId] = (categoryExpensesMap[categoryId] || 0) + tx.amount;
+        const [txYear, txMonth] = tx.date.split("-").map(Number);
+        const isMonthMatch = selectedMonth === "" || txMonth === selectedMonth;
+        const isYearMatch = selectedYear === "" || txYear === selectedYear;
+
+        if (isMonthMatch && isYearMatch) {
+          if (tx.type === "EXPENSE") {
+            categoryExpensesMap[categoryId] = (categoryExpensesMap[categoryId] || 0) + tx.amount;
+          }
         }
       }
     });
@@ -108,6 +148,16 @@ export default function Home() {
       value: pieDataMap[key].value,
       color: pieDataMap[key].color
     }));
+
+    // Formata o gráfico de evolução anual
+    let finalEvolutionData: any[] = [];
+    if (selectedYear !== "") {
+      finalEvolutionData = evolutionMonthly;
+    } else {
+      finalEvolutionData = Object.keys(evolutionYearlyMap)
+        .sort((a, b) => a.localeCompare(b))
+        .map(key => evolutionYearlyMap[key]);
+    }
 
     // 4. Mapeia categorias que possuem limite cadastrado para os Orçamentos
     const calculatedBudgets = categoriesList
@@ -131,6 +181,7 @@ export default function Home() {
     setBarData(sortedBarData);
     setPieData(finalPieData);
     setBudgets(calculatedBudgets);
+    setYearlyData(finalEvolutionData);
   };
 
   const loadDashboardData = async () => {
@@ -138,7 +189,6 @@ export default function Home() {
       setLoading(true);
 
       let query = "";
-      if (selectedMonth) query += `month=${selectedMonth}&`;
       if (selectedYear) query += `year=${selectedYear}`;
 
       const [txData, accountsData, categoriesData] = await Promise.all([
@@ -180,17 +230,17 @@ export default function Home() {
     }
   };
 
-  // Dispara a busca sempre que alterar o mês ou o ano
+  // Dispara a busca sempre que alterar o ano
   useEffect(() => {
     loadDashboardData();
-  }, [selectedMonth, selectedYear]);
+  }, [selectedYear]);
 
-  // Dispara o recálculo local no frontend sempre que os filtros ou os dados brutos mudarem
+  // Dispara o recálculo local no frontend sempre que os filtros, dados brutos ou mês mudarem
   useEffect(() => {
     if (rawTransactions.length > 0 || allAccounts.length > 0) {
       calculateMetrics(rawTransactions, allAccounts, allCategories, selectedAccounts, selectedCategories);
     }
-  }, [selectedAccounts, selectedCategories, rawTransactions, allAccounts, allCategories]);
+  }, [selectedAccounts, selectedCategories, selectedMonth, rawTransactions, allAccounts, allCategories]);
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -410,7 +460,9 @@ export default function Home() {
                     <Wallet className="w-8 h-8 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Saldo Total Contas</p>
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {selectedMonth !== "" ? "Saldo Total Contas" : "Saldo Consolidado do Período"}
+                    </p>
                     <h3 className="text-3xl font-bold mt-1">R$ {balance.toFixed(2)}</h3>
                   </div>
                 </div>
@@ -421,7 +473,9 @@ export default function Home() {
                   <ArrowUpRight className="w-24 h-24 text-green-500" />
                 </div>
                 <div className="flex flex-col relative z-10">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total de Entradas</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {selectedMonth !== "" ? "Total de Entradas" : "Total Entradas no Ano"}
+                  </p>
                   <h3 className="text-3xl font-bold text-green-500">R$ {income.toFixed(2)}</h3>
                 </div>
               </div>
@@ -431,7 +485,9 @@ export default function Home() {
                   <ArrowDownRight className="w-24 h-24 text-red-500" />
                 </div>
                 <div className="flex flex-col relative z-10">
-                  <p className="text-sm font-medium text-muted-foreground mb-1">Total de Saídas</p>
+                  <p className="text-sm font-medium text-muted-foreground mb-1">
+                    {selectedMonth !== "" ? "Total de Saídas" : "Total Saídas no Ano"}
+                  </p>
                   <h3 className="text-3xl font-bold text-red-500">R$ {expense.toFixed(2)}</h3>
                 </div>
               </div>
@@ -439,7 +495,9 @@ export default function Home() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="bg-card p-6 rounded-2xl border border-border shadow-lg">
-                <h3 className="text-lg font-bold mb-6">Fluxo de Caixa Diário</h3>
+                <h3 className="text-lg font-bold mb-6">
+                  {selectedMonth !== "" ? "Fluxo de Caixa Diário" : "Fluxo Diário Acumulado"}
+                </h3>
                 <div className="h-[300px] w-full">
                   {barData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -459,14 +517,16 @@ export default function Home() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Nenhum dado registrado.
+                      Nenhum dado registrado para este mês.
                     </div>
                   )}
                 </div>
               </div>
 
               <div className="bg-card p-6 rounded-2xl border border-border shadow-lg">
-                <h3 className="text-lg font-bold mb-6">Despesas por Categoria</h3>
+                <h3 className="text-lg font-bold mb-6">
+                  {selectedMonth !== "" ? "Despesas por Categoria" : "Despesas por Categoria no Ano"}
+                </h3>
                 <div className="h-[300px] w-full">
                   {pieData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
@@ -495,10 +555,42 @@ export default function Home() {
                     </ResponsiveContainer>
                   ) : (
                     <div className="flex items-center justify-center h-full text-muted-foreground">
-                      Nenhuma despesa registrada.
+                      Nenhuma despesa registrada para este mês.
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Novo Gráfico de Evolução Anual/Histórico */}
+            <div className="mt-8 bg-card p-6 rounded-2xl border border-border shadow-lg">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                <Activity className="w-5 h-5 text-primary" />
+                {selectedYear !== "" ? `Evolução de Receitas vs Despesas de ${selectedYear} (Mensal)` : "Evolução Financeira Histórica (Anual)"}
+              </h3>
+              <div className="h-[320px] w-full">
+                {yearlyData.length > 0 && yearlyData.some(d => d.Receitas > 0 || d.Despesas > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={yearlyData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
+                      <XAxis dataKey="name" stroke="#888" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `R$ ${value.toLocaleString('pt-BR')}`} />
+                      <Tooltip 
+                        cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                        contentStyle={{ backgroundColor: '#1e1e2d', borderColor: '#333', borderRadius: '8px', color: '#fff' }}
+                        itemStyle={{ color: '#fff' }}
+                        formatter={(value: number) => `R$ ${value.toFixed(2)}`}
+                      />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                      <Bar dataKey="Receitas" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                      <Bar dataKey="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-muted-foreground">
+                    Nenhum dado registrado para o período selecionado.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -507,7 +599,7 @@ export default function Home() {
               <div className="mt-8 bg-card p-6 rounded-2xl border border-border shadow-lg">
                 <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                   <Activity className="w-5 h-5 text-primary" />
-                  Orçamentos e Metas de Gastos
+                  Orçamentos e Metas de Gastos {selectedMonth !== "" ? "do Mês" : "do Ano"}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {budgets.map((budget) => {
