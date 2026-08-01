@@ -26,6 +26,7 @@ export default function Transactions() {
   const [showModal, setShowModal] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number | "">(new Date().getFullYear());
+  const [searchTerm, setSearchTerm] = useState("");
   
   const [formData, setFormData] = useState<any>({ 
     description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
@@ -99,14 +100,22 @@ export default function Transactions() {
     }
   };
 
+  const filteredTransactions = transactions.filter(tx => {
+    const term = searchTerm.toLowerCase();
+    const descMatch = tx.description.toLowerCase().includes(term);
+    const catMatch = tx.category?.name?.toLowerCase().includes(term);
+    const accMatch = tx.account?.name?.toLowerCase().includes(term);
+    return descMatch || catMatch || accMatch;
+  });
+
   const exportToCSV = () => {
-    if (transactions.length === 0) {
+    if (filteredTransactions.length === 0) {
       alert("Nenhuma transação para exportar");
       return;
     }
 
     const headers = ["Descrição", "Categoria", "Conta", "Data", "Tipo", "Valor (R$)"];
-    const rows = transactions.map(tx => [
+    const rows = filteredTransactions.map(tx => [
       tx.description,
       tx.category?.name || "Sem Categoria",
       tx.account?.name || "Sem Conta",
@@ -168,7 +177,9 @@ export default function Transactions() {
               <input 
                 type="text" 
                 placeholder="Buscar transação..." 
-                className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary w-64"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                className="bg-input border border-border rounded-lg px-4 py-2 text-sm focus:outline-none focus:border-primary w-64 text-foreground"
               />
               <div className="flex gap-4 items-center">
                 <select 
@@ -199,11 +210,12 @@ export default function Transactions() {
                   {[2024, 2025, 2026, 2027, 2028].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
 
-                {(selectedMonth !== "" || selectedYear !== "") && (
+                {(selectedMonth !== "" || selectedYear !== "" || searchTerm !== "") && (
                   <button
                     onClick={() => {
                       setSelectedMonth("");
                       setSelectedYear("");
+                      setSearchTerm("");
                     }}
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-secondary/40 border border-border rounded-lg px-3 py-2 transition-colors"
                     title="Limpar filtros"
@@ -234,7 +246,7 @@ export default function Transactions() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {transactions.map((tx) => (
+                {filteredTransactions.map((tx) => (
                   <tr key={tx.id} className="hover:bg-secondary/30 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
@@ -293,9 +305,11 @@ export default function Transactions() {
                     </td>
                   </tr>
                 ))}
-                {transactions.length === 0 && (
+                {filteredTransactions.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-muted-foreground">Nenhuma transação encontrada.</td>
+                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                      {transactions.length === 0 ? "Nenhuma transação encontrada." : "Nenhum resultado corresponde à sua busca."}
+                    </td>
                   </tr>
                 )}
               </tbody>
