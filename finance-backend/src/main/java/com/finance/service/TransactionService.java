@@ -62,4 +62,30 @@ public class TransactionService {
     public void delete(Long id) {
         repository.deleteById(id);
     }
+
+    public Transaction processSingleRecurrence(Long id) {
+        Transaction template = repository.findById(id).orElseThrow();
+        if (!template.isRecurring()) {
+            throw new IllegalArgumentException("A transação não é recorrente");
+        }
+
+        // Clona a transação e salva no histórico (como transação comum)
+        Transaction newTransaction = Transaction.builder()
+                .description(template.getDescription())
+                .amount(template.getAmount())
+                .date(template.getNextRecurrenceDate() != null ? template.getNextRecurrenceDate() : LocalDate.now())
+                .type(template.getType())
+                .recurring(false)
+                .account(template.getAccount())
+                .category(template.getCategory())
+                .build();
+        repository.save(newTransaction);
+
+        // Avança a data da próxima execução no template (+1 mês)
+        LocalDate nextDate = template.getNextRecurrenceDate() != null 
+                ? template.getNextRecurrenceDate() 
+                : template.getDate();
+        template.setNextRecurrenceDate(nextDate.plusMonths(1));
+        return repository.save(template);
+    }
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
-import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X, Download } from "lucide-react";
+import { ArrowRightLeft, Plus, Pencil, Trash2, ArrowUpRight, ArrowDownRight, RefreshCw, X, Download, Play, CalendarClock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api";
 
@@ -13,6 +13,7 @@ type Transaction = {
   date: string;
   recurring: boolean;
   recurrenceFrequency?: string;
+  nextRecurrenceDate?: string;
   account: { id: number, name?: string };
   category: { id: number, name?: string, color?: string };
 };
@@ -27,6 +28,7 @@ export default function Transactions() {
   const [selectedMonth, setSelectedMonth] = useState<number | "">(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number | "">(new Date().getFullYear());
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"history" | "recurring">("history");
   
   const [formData, setFormData] = useState<any>({ 
     description: "", amount: 0, type: "EXPENSE", date: new Date().toISOString().split('T')[0], 
@@ -100,7 +102,21 @@ export default function Transactions() {
     }
   };
 
+  const handleProcessRecurrence = async (id: number) => {
+    try {
+      await fetchApi(`/transactions/${id}/process-recurrence`, { method: "POST" });
+      loadAllData();
+      alert("Transação recorrente lançada com sucesso! Um novo lançamento foi criado no histórico.");
+    } catch (error) {
+      console.error(error);
+      alert("Erro ao processar transação recorrente");
+    }
+  };
+
   const filteredTransactions = transactions.filter(tx => {
+    if (activeTab === "history" && tx.recurring) return false;
+    if (activeTab === "recurring" && !tx.recurring) return false;
+
     const term = searchTerm.toLowerCase();
     const descMatch = tx.description.toLowerCase().includes(term);
     const catMatch = tx.category?.name?.toLowerCase().includes(term);
@@ -168,6 +184,32 @@ export default function Transactions() {
             Nova Transação
           </button>
         </header>
+
+        {/* Alternador de Abas */}
+        <div className="flex border-b border-border mb-6">
+          <button
+            onClick={() => setActiveTab("history")}
+            className={`px-6 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === "history"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <ArrowRightLeft className="w-4 h-4" />
+            Lançamentos Efetivados
+          </button>
+          <button
+            onClick={() => setActiveTab("recurring")}
+            className={`px-6 py-3 text-sm font-semibold border-b-2 transition-all flex items-center gap-2 ${
+              activeTab === "recurring"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <CalendarClock className="w-4 h-4" />
+            Assinaturas & Recorrências
+          </button>
+        </div>
 
         {loading ? (
           <div className="text-center text-muted-foreground py-10">Carregando...</div>
@@ -240,74 +282,109 @@ export default function Transactions() {
                 <tr className="bg-secondary/50 text-muted-foreground text-sm uppercase tracking-wider">
                   <th className="p-4 font-medium border-b border-border">Descrição</th>
                   <th className="p-4 font-medium border-b border-border">Categoria / Conta</th>
-                  <th className="p-4 font-medium border-b border-border">Data</th>
+                  <th className="p-4 font-medium border-b border-border">
+                    {activeTab === "history" ? "Data" : "Próximo Lançamento"}
+                  </th>
+                  {activeTab === "recurring" && (
+                    <th className="p-4 font-medium border-b border-border">Status</th>
+                  )}
                   <th className="p-4 font-medium border-b border-border text-right">Valor</th>
                   <th className="p-4 font-medium border-b border-border text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${tx.type === 'INCOME' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                          {tx.type === 'INCOME' ? <ArrowUpRight className="w-4 h-4"/> : <ArrowDownRight className="w-4 h-4"/>}
+                {filteredTransactions.map((tx) => {
+                  let isOverdue = false;
+                  if (tx.recurring && tx.nextRecurrenceDate) {
+                    const todayStr = new Date().toISOString().split("T")[0];
+                    isOverdue = tx.nextRecurrenceDate <= todayStr;
+                  }
+
+                  return (
+                    <tr key={tx.id} className="hover:bg-secondary/30 transition-colors">
+                      <td className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-lg ${tx.type === 'INCOME' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                            {tx.type === 'INCOME' ? <ArrowUpRight className="w-4 h-4"/> : <ArrowDownRight className="w-4 h-4"/>}
+                          </div>
+                          <div>
+                            <p className="font-semibold flex items-center gap-2">
+                              {tx.description}
+                              {tx.recurring && <span title="Recorrente"><RefreshCw className="w-3 h-3 text-muted-foreground" /></span>}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-semibold flex items-center gap-2">
-                            {tx.description}
-                            {tx.recurring && <span title="Recorrente"><RefreshCw className="w-3 h-3 text-muted-foreground" /></span>}
-                          </p>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span 
+                            className="w-2.5 h-2.5 rounded-full shrink-0" 
+                            style={{ backgroundColor: tx.category?.color || "#9ca3af" }}
+                          />
+                          <div className="text-sm">
+                            <span className="font-medium">{tx.category?.name || "Sem Categoria"}</span>
+                            <span className="text-muted-foreground block text-xs">{tx.account?.name}</span>
+                          </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-2">
-                        <span 
-                          className="w-2.5 h-2.5 rounded-full shrink-0" 
-                          style={{ backgroundColor: tx.category?.color || "#9ca3af" }}
-                        />
-                        <div className="text-sm">
-                          <span className="font-medium">{tx.category?.name || "Sem Categoria"}</span>
-                          <span className="text-muted-foreground block text-xs">{tx.account?.name}</span>
+                      </td>
+                      <td className="p-4 text-muted-foreground text-sm">
+                        {activeTab === "history" ? tx.date : tx.nextRecurrenceDate || tx.date}
+                      </td>
+                      {activeTab === "recurring" && (
+                        <td className="p-4">
+                          <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                            isOverdue
+                              ? "bg-red-500/10 text-red-500 animate-pulse"
+                              : "bg-green-500/10 text-green-500"
+                          }`}>
+                            {isOverdue ? "Pendente" : "Agendado"}
+                          </span>
+                        </td>
+                      )}
+                      <td className="p-4 text-right">
+                        <span className={`font-bold ${tx.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
+                          {tx.type === 'INCOME' ? '+' : '-'} R$ {tx.amount.toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          {activeTab === "recurring" && (
+                            <button
+                              onClick={() => tx.id && handleProcessRecurrence(tx.id)}
+                              className="p-2 bg-secondary text-muted-foreground hover:text-green-500 hover:bg-green-500/10 rounded-lg transition-colors"
+                              title="Lançar transação agora"
+                            >
+                              <Play className="w-4 h-4 fill-current" />
+                            </button>
+                          )}
+                          <button 
+                            onClick={() => {
+                              setFormData({
+                                id: tx.id, description: tx.description, amount: tx.amount, type: tx.type, 
+                                date: tx.date, recurring: tx.recurring, accountId: tx.account?.id, categoryId: tx.category?.id
+                              });
+                              setShowModal(true);
+                            }}
+                            className="p-2 bg-secondary text-muted-foreground hover:text-primary rounded-lg transition-colors"
+                            title="Editar"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => tx.id && handleDelete(tx.id)}
+                            className="p-2 bg-secondary text-muted-foreground hover:text-destructive rounded-lg transition-colors"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-4 text-muted-foreground text-sm">
-                      {tx.date}
-                    </td>
-                    <td className="p-4 text-right">
-                      <span className={`font-bold ${tx.type === 'INCOME' ? 'text-green-500' : 'text-red-500'}`}>
-                        {tx.type === 'INCOME' ? '+' : '-'} R$ {tx.amount.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => {
-                            setFormData({
-                              id: tx.id, description: tx.description, amount: tx.amount, type: tx.type, 
-                              date: tx.date, recurring: tx.recurring, accountId: tx.account?.id, categoryId: tx.category?.id
-                            });
-                            setShowModal(true);
-                          }}
-                          className="p-2 bg-secondary text-muted-foreground hover:text-primary rounded-lg transition-colors"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button 
-                          onClick={() => tx.id && handleDelete(tx.id)}
-                          className="p-2 bg-secondary text-muted-foreground hover:text-destructive rounded-lg transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredTransactions.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-muted-foreground">
+                    <td colSpan={activeTab === "recurring" ? 6 : 5} className="p-8 text-center text-muted-foreground">
                       {transactions.length === 0 ? "Nenhuma transação encontrada." : "Nenhum resultado corresponde à sua busca."}
                     </td>
                   </tr>

@@ -38,4 +38,9 @@ public class TransactionController {
         service.delete(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/process-recurrence")
+    public ResponseEntity<Transaction> processRecurrence(@PathVariable Long id) {
+        return ResponseEntity.ok(service.processSingleRecurrence(id));
+    }
 }
